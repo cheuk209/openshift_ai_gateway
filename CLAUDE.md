@@ -229,6 +229,99 @@ oc kustomize manifests/overlays/prod > gitops/prod/ai-gateway.yaml
 - Secrets for API keys and credentials (encrypted at rest)
 - GitOps workflow with ArgoCD or OpenShift GitOps
 
+## Kustomize Patterns and Environment Configuration
+
+### Base Resources
+The `base` directory contains the common resources shared across all environments:
+- Core deployment specifications with minimal resource requirements
+- Service definitions
+- ConfigMaps with default configurations
+- RBAC policies
+- ServiceAccount definitions
+
+### Environment-Specific Overlays
+
+#### Development Environment (`manifests/overlays/dev`)
+- **Namespace**: `ai-gateway-dev`
+- **Replicas**: 1-2 pods (no HPA)
+- **Resources**: Lower CPU/memory limits (500m CPU, 512Mi memory)
+- **Storage**: Ephemeral storage only
+- **Security**: Relaxed network policies for debugging
+- **Istio**: Permissive mTLS mode, verbose logging
+- **Routes**: Dev-specific hostname (e.g., `ai-gateway-dev.apps.cluster.local`)
+- **Secrets**: Development API keys and test credentials
+
+#### Production Environment (`manifests/overlays/prod`)
+- **Namespace**: `ai-gateway-prod`
+- **Replicas**: 3-10 pods with HPA
+- **Resources**: Higher limits (2 CPU, 4Gi memory)
+- **Storage**: Persistent volumes for caching
+- **Security**: Strict network policies, pod security policies
+- **Istio**: Strict mTLS, rate limiting, circuit breakers
+- **Routes**: Production hostname with TLS (e.g., `api.ai-gateway.company.com`)
+- **Monitoring**: Full alerting rules, SLO tracking
+- **High Availability**: PodDisruptionBudget, anti-affinity rules
+
+### Kustomize Best Practices for This Project
+```yaml
+# Example base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - rbac.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app: ai-gateway
+  app.kubernetes.io/name: ai-gateway
+  app.kubernetes.io/part-of: openshift-ai-platform
+
+# Example overlays/prod/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-gateway-prod
+
+bases:
+  - ../../base
+
+resources:
+  - route.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - configmap-patch.yaml
+
+configMapGenerator:
+  - name: ai-gateway-config
+    behavior: merge
+    literals:
+      - environment=production
+      - log_level=info
+      - rate_limit=1000
+
+secretGenerator:
+  - name: ai-gateway-secrets
+    files:
+      - secrets/api-keys.enc.yaml  # Sealed secrets
+
+replicas:
+  - name: ai-gateway
+    count: 3
+
+images:
+  - name: ai-gateway
+    newTag: v1.2.3-prod
+```
+
 ### Testing Strategy
 - Unit tests for custom operators and controllers
 - Integration tests using Kind or OpenShift Local
