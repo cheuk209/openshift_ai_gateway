@@ -8,22 +8,65 @@ This is an enterprise-grade AI gateway designed for OpenShift environments with 
 
 ## Project Structure
 
-The intended directory structure is:
+The intended directory structure using Kustomize for multi-environment management:
 ```
 openshift-ai-gateway/
 ├── README.md                  # Project overview and architecture diagrams
 ├── docs/                      # Detailed setup and API documentation
-├── manifests/                 # Kubernetes/OpenShift YAML files
-│   ├── base/                  # Base Kustomization files
-│   ├── overlays/              # Environment-specific overlays
-│   └── crds/                  # Custom Resource Definitions
-├── istio-config/              # Istio service mesh configurations
-│   ├── virtual-services/      # Traffic routing rules
-│   ├── destination-rules/     # Load balancing and circuit breaking
-│   └── security/              # mTLS and authorization policies
+├── manifests/                 # Kubernetes/OpenShift YAML files with Kustomize
+│   ├── base/                  # Base resources shared across environments
+│   │   ├── kustomization.yaml
+│   │   ├── namespace.yaml
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   ├── configmap.yaml
+│   │   ├── serviceaccount.yaml
+│   │   └── rbac.yaml
+│   └── overlays/              # Environment-specific configurations
+│       ├── dev/
+│       │   ├── kustomization.yaml
+│       │   ├── configmap-patch.yaml
+│       │   ├── deployment-patch.yaml
+│       │   ├── route.yaml
+│       │   └── secrets/       # Dev secrets (GitOps sealed secrets)
+│       └── prod/
+│           ├── kustomization.yaml
+│           ├── configmap-patch.yaml
+│           ├── deployment-patch.yaml
+│           ├── route.yaml
+│           ├── hpa.yaml      # Horizontal Pod Autoscaler
+│           ├── pdb.yaml      # Pod Disruption Budget
+│           └── secrets/       # Prod secrets (GitOps sealed secrets)
+├── istio/                     # Istio service mesh configurations
+│   ├── base/
+│   │   ├── kustomization.yaml
+│   │   ├── gateway.yaml
+│   │   ├── virtual-service.yaml
+│   │   ├── destination-rule.yaml
+│   │   └── peer-authentication.yaml
+│   └── overlays/
+│       ├── dev/
+│       │   ├── kustomization.yaml
+│       │   └── virtual-service-patch.yaml
+│       └── prod/
+│           ├── kustomization.yaml
+│           ├── authorization-policy.yaml
+│           └── rate-limit-config.yaml
 ├── monitoring/                # Observability stack
-│   ├── prometheus/            # Metrics collection
-│   └── grafana/               # Dashboards
+│   ├── base/
+│   │   ├── kustomization.yaml
+│   │   ├── prometheus-servicemonitor.yaml
+│   │   └── grafana-dashboards-configmap.yaml
+│   └── overlays/
+│       ├── dev/
+│       │   └── kustomization.yaml
+│       └── prod/
+│           ├── kustomization.yaml
+│           └── alerting-rules.yaml
+├── operators/                 # Operator subscriptions and configs
+│   ├── service-mesh-operator.yaml
+│   ├── prometheus-operator.yaml
+│   └── cert-manager-operator.yaml
 └── examples/                  # Client implementation examples
     ├── python/                # Python client examples
     ├── nodejs/                # Node.js client examples
@@ -41,19 +84,60 @@ openshift-ai-gateway/
 
 ## Common Commands
 
-### OpenShift/Kubernetes Operations
+### Kustomize Build and Deploy
 ```bash
+# Build and view manifests for dev environment
+oc kustomize manifests/overlays/dev
+
+# Build and view manifests for prod environment
+oc kustomize manifests/overlays/prod
+
 # Deploy to development environment
 oc apply -k manifests/overlays/dev
+oc apply -k istio/overlays/dev
+oc apply -k monitoring/overlays/dev
 
-# Deploy to production
+# Deploy to production environment
 oc apply -k manifests/overlays/prod
+oc apply -k istio/overlays/prod
+oc apply -k monitoring/overlays/prod
 
+# Dry-run deployment to validate
+oc apply -k manifests/overlays/dev --dry-run=client
+
+# Delete resources using Kustomize
+oc delete -k manifests/overlays/dev
+```
+
+### Environment Management
+```bash
+# Switch between environments
+oc project ai-gateway-dev
+oc project ai-gateway-prod
+
+# Compare environments
+diff <(oc kustomize manifests/overlays/dev) <(oc kustomize manifests/overlays/prod)
+
+# Check current namespace
+oc config current-context
+```
+
+### OpenShift/Kubernetes Operations
+```bash
 # Check deployment status
-oc get pods -n ai-gateway
+oc get pods -n ai-gateway-dev
+oc get pods -n ai-gateway-prod
 
 # View logs
-oc logs -f deployment/ai-gateway -n ai-gateway
+oc logs -f deployment/ai-gateway -n ai-gateway-dev
+oc logs -f deployment/ai-gateway -n ai-gateway-prod
+
+# Scale deployment manually (dev only, prod uses HPA)
+oc scale deployment/ai-gateway --replicas=3 -n ai-gateway-dev
+
+# Check routes
+oc get routes -n ai-gateway-dev
+oc get routes -n ai-gateway-prod
 
 # Access OpenShift console
 oc console
@@ -61,29 +145,42 @@ oc console
 
 ### Istio Service Mesh
 ```bash
-# Apply Istio configurations
-oc apply -f istio-config/ -n ai-gateway
+# Apply Istio configurations with Kustomize
+oc apply -k istio/overlays/dev
+oc apply -k istio/overlays/prod
 
 # Check Istio injection
-oc get namespace ai-gateway -o jsonpath='{.metadata.labels}'
+oc get namespace ai-gateway-dev -o jsonpath='{.metadata.labels}'
+oc get namespace ai-gateway-prod -o jsonpath='{.metadata.labels}'
 
 # View Istio metrics
 istioctl dashboard grafana
 
 # Check mTLS status
-istioctl authn tls-check
+istioctl authn tls-check -n ai-gateway-prod
+
+# Analyze Istio configuration
+istioctl analyze -k istio/overlays/prod
 ```
 
 ### Development Workflow
 ```bash
-# Validate Kubernetes manifests
-oc apply --dry-run=client -f manifests/
+# Validate all Kustomize overlays
+for env in dev prod; do
+  echo "Validating $env environment"
+  oc apply -k manifests/overlays/$env --dry-run=client
+  oc apply -k istio/overlays/$env --dry-run=client
+  oc apply -k monitoring/overlays/$env --dry-run=client
+done
 
-# Run security scans on manifests
-oc-compliance check-manifests manifests/
+# Run security scans on built manifests
+oc kustomize manifests/overlays/prod | oc-compliance check-manifests -
 
 # Test Istio policies locally
-istioctl analyze -f istio-config/
+istioctl analyze <(oc kustomize istio/overlays/prod)
+
+# Generate manifests for GitOps
+oc kustomize manifests/overlays/prod > gitops/prod/ai-gateway.yaml
 ```
 
 ## Architecture Overview
