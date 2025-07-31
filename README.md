@@ -104,3 +104,97 @@ By the end, you should be able to:
 - OpenShift must-gather for debugging complex networking issues
 
 Does this project seem appropriately challenging? Should I adjust the complexity up or down, or focus on specific areas you're most concerned about?
+
+## Recommended Project Structure
+
+To support the multi-environment deployment described above, here's the ideal repository structure using Kustomize:
+
+```
+openshift-ai-gateway/
+├── README.md                  # This file
+├── CLAUDE.md                  # AI assistant guidance
+├── docs/
+│   ├── architecture.md        # System design and diagrams
+│   ├── deployment.md          # Step-by-step deployment guide
+│   ├── api-reference.md       # API documentation
+│   └── troubleshooting.md     # Common issues and solutions
+├── manifests/                 # Kubernetes/OpenShift resources
+│   ├── base/                  # Shared base resources
+│   │   ├── kustomization.yaml
+│   │   ├── namespace.yaml
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   ├── configmap.yaml
+│   │   ├── serviceaccount.yaml
+│   │   └── rbac.yaml
+│   └── overlays/
+│       ├── dev/              # Development environment
+│       │   ├── kustomization.yaml
+│       │   ├── route.yaml
+│       │   └── patches/
+│       │       ├── deployment-patch.yaml
+│       │       └── configmap-patch.yaml
+│       └── prod/             # Production environment
+│           ├── kustomization.yaml
+│           ├── route.yaml
+│           ├── hpa.yaml      # Horizontal Pod Autoscaler
+│           ├── pdb.yaml      # Pod Disruption Budget
+│           ├── networkpolicy.yaml
+│           └── patches/
+│               ├── deployment-patch.yaml
+│               └── configmap-patch.yaml
+├── istio/                    # Service mesh configurations
+│   ├── base/
+│   │   ├── kustomization.yaml
+│   │   ├── gateway.yaml
+│   │   ├── virtual-service.yaml
+│   │   ├── destination-rule.yaml
+│   │   └── peer-authentication.yaml
+│   └── overlays/
+│       ├── dev/
+│       │   ├── kustomization.yaml
+│       │   └── patches/
+│       └── prod/
+│           ├── kustomization.yaml
+│           ├── authorization-policy.yaml
+│           ├── rate-limit-config.yaml
+│           └── patches/
+├── monitoring/               # Observability stack
+│   ├── base/
+│   │   ├── kustomization.yaml
+│   │   ├── servicemonitor.yaml
+│   │   └── dashboards/
+│   └── overlays/
+│       ├── dev/
+│       └── prod/
+│           └── alerting-rules.yaml
+├── operators/               # Operator subscriptions
+│   ├── service-mesh-operator.yaml
+│   ├── prometheus-operator.yaml
+│   └── cert-manager-operator.yaml
+├── scripts/                 # Utility scripts
+│   ├── deploy.sh           # Deployment automation
+│   ├── validate.sh         # Pre-deployment validation
+│   └── rollback.sh         # Emergency rollback
+└── examples/               # Client implementations
+    ├── python/
+    │   ├── requirements.txt
+    │   └── client.py
+    ├── nodejs/
+    │   ├── package.json
+    │   └── client.js
+    └── curl/
+        └── examples.sh
+```
+
+### Key Design Decisions
+
+1. **Kustomize for Configuration Management**: Separating base resources from environment-specific overlays allows for DRY principles while maintaining flexibility.
+
+2. **Separate Namespaces**: `ai-gateway-dev` and `ai-gateway-prod` provide complete isolation between environments.
+
+3. **Istio Configuration Hierarchy**: Base Istio configs define the service mesh structure, while overlays add environment-specific security policies.
+
+4. **GitOps Ready**: This structure works seamlessly with ArgoCD or OpenShift GitOps for automated deployments.
+
+5. **Monitoring Separation**: Dev gets basic monitoring, while prod includes full alerting and SLO tracking.
