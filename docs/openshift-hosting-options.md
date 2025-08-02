@@ -49,3 +49,29 @@ You can install the open-source version of OpenShift (OKD) on a cloud provider l
 For this project, the strong recommendation is to start with **Red Hat CodeReady Containers (CRC)**. It offers the best combination of a realistic OpenShift experience, full administrative control, and zero cost.
 
 If your computer cannot run CRC, the **OpenShift Developer Sandbox** is the next best option.
+
+## Decision and Best Practices
+
+After consideration of the options, **Red Hat CodeReady Containers (CRC)** has been chosen for this project.
+
+### Best Practices for Running and Maintaining CRC
+
+Here are some best practices to ensure a smooth experience with CRC:
+
+#### Resource Management
+
+*   **System Requirements:** While CRC can run with 4 vCPUs and 9 GB of RAM, allocating more resources is recommended for a better experience, especially if you plan to run additional services. A minimum of 8 vCPUs, 16GB of RAM, and 70GB of storage is a good starting point.
+*   **Configuration:** You can adjust the memory and CPU allocated to the CRC virtual machine using the `crc config set` command. For example, to set the memory to 16GB, you would run `crc config set memory 16384`. These changes require a restart of the CRC instance to take effect (`crc stop` and `crc start`).
+*   **Hardware Virtualization:** Ensure that hardware virtualization (Intel VT-x or AMD-V) is enabled in your system's BIOS.
+
+#### Daily Use
+
+*   **Starting and Stopping:** Use `crc start` to start the cluster and `crc stop` to shut it down.
+*   **Network:** Be aware that some VPN clients can interfere with CRC's networking. It's often necessary to disconnect from a VPN when running CRC.
+*   **Accessing the Cluster:** Use the `oc` command-line tool and the web console to interact with your OpenShift cluster. The `crc start` command will provide you with the necessary credentials and the web console URL.
+
+#### Maintenance and Troubleshooting
+
+*   **Updates:** Keep CRC and your host operating system up to date to benefit from the latest bug fixes and features.
+*   **Clean Slate:** If you encounter persistent issues, you can use `crc delete` to completely remove the CRC virtual machine and start fresh.
+*   **Monitoring:** The cluster monitoring operator is disabled by default to conserve resources. If you need to monitor your cluster's performance, you can enable it, but be sure to increase the memory allocated to CRC to at least 14GB.
