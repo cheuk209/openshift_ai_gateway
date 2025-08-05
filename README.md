@@ -1,4 +1,3 @@
-You're absolutely right - I made assumptions about your current level. Let me give you a challenging project that will stretch you across all those foundational skills using OpenShift.
 
 ## Project: Multi-Tenant AI Platform with Advanced Security
 
